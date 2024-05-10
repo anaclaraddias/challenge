@@ -17,6 +17,62 @@ class PlayerController extends Controller
     public const IS_NOT_GOALKEEPER = "nao";
     public const HABILITY_MAX_VALUE = 5;
 
+    private array $confirmedPlayers;
+    private array $teams = [[], []];
+    private array $teamsInfo = [
+        [
+            "currentHabilityValue" => 0,
+            "currentQuantityOfPlayersWithHighestSkill" => 0,
+            "hasGoalkeeper" => false,
+        ], 
+        [
+            "currentHabilityValue" => 0,
+            "currentQuantityOfPlayersWithHighestSkill" => 0,
+            "hasGoalkeeper" => false,
+        ]
+    ];
+
+    private int $teamIndex;
+    private int $maxNumberOfPlayersWithHighestSkill;
+    private int $teamHabilityMaxValue;
+    private Player $player;
+
+    public function setConfirmedPlayers(array $confirmedPlayers): void
+    {
+        $this->confirmedPlayers = $confirmedPlayers;
+    }
+
+    public function setTeams(array $teams): void
+    {
+        $this->teams = $teams;
+    }
+
+    public function setTeamsInfo(array $teamsInfo): void
+    {
+        $this->teamsInfo = $teamsInfo;
+    }
+
+    public function setTeamIndex(int $teamIndex): void
+    {
+        $this->teamIndex = $teamIndex;
+    }
+
+    public function setMaxNumberOfPlayersWithHighestSkill(int $maxNumberOfPlayersWithHighestSkill): void
+    {
+        $this->maxNumberOfPlayersWithHighestSkill = $maxNumberOfPlayersWithHighestSkill;
+    }
+
+    public function setTeamHabilityMaxValue(int $teamHabilityMaxValue): void
+    {
+        $this->teamHabilityMaxValue = $teamHabilityMaxValue;
+    }
+
+
+    public function setPlayer(Player $player): void
+    {
+        $this->player = $player;
+    }
+
     public function create(Request $request): RedirectResponse
     {
         $request->validate([
@@ -66,79 +122,69 @@ class PlayerController extends Controller
             return response()->json(['error' => 'Os jogadores confirmados não são suficientes para criar os times com a quantidade escolhida'], 400);
         }
 
-        session([
-            'confirmed_players' => $confirmedPlayers, 
-            'players_quantity' => $playersQuantity
-        ]);
+        if (count($confirmedPlayers) != $playersQuantity*2) {
+            return response()->json(['error' => 'Escolha a quantidade correta de jogadores para a formação dos dois times com jogadores'], 400);
+        }
 
-        return response()->json(['url' => "/teams"]);
-    }
+        $this->setConfirmedPlayers($confirmedPlayers);
 
-    public function listTeams(Request $request): View
-    {
-        $confirmedPlayers = $request->session()->get('confirmed_players', []);
-        $playersQuantity = (int) $request->session()->get('players_quantity');
-
-        $teams = [[], []];
+        $maxIterations = ($playersQuantity*2) + 5;
         $counter = 0;
-        $maxNumberOfPlayersWithHighestSkill = $this->calculateTeamBalancing($playersQuantity);
-        $teamHabilityMaxValue = $this->calculateTeamHabilityMaxValue($playersQuantity, $maxNumberOfPlayersWithHighestSkill);
+        $this->setMaxNumberOfPlayersWithHighestSkill($this->calculateTeamBalancing($playersQuantity));
+        $this->setTeamHabilityMaxValue($this->calculateTeamHabilityMaxValue($playersQuantity));
 
-        $teamsInfo = [
-            [
-                "currentHabilityValue" => 0,
-                "currentQuantityOfPlayersWithHighestSkill" => 0,
-                "hasGoalkeeper" => false,
-            ], 
-            [
-                "currentHabilityValue" => 0,
-                "currentQuantityOfPlayersWithHighestSkill" => 0,
-                "hasGoalkeeper" => false,
-            ]
-        ];
+        $players = Player::whereIn('name', $this->confirmedPlayers)->get()->keyBy('name');
 
-        $loopCondition = count($teams[0]) != $playersQuantity && count($teams[1]) != $playersQuantity;
+        while (!empty($this->confirmedPlayers)) {
+            $this->setTeamIndex($counter % 2);
 
-        while ($loopCondition) {
-            $teamIndex = $counter % 2;
-            $team = $teams[$teamIndex];
-
-            if (count($team) == $playersQuantity) {
-                $counter++;
+            if ($counter == $maxIterations){
                 break;
             }
 
-            $randomIndex = rand(0, count($confirmedPlayers) - 1);
-            $playerName = $confirmedPlayers[$randomIndex];
-            $player = Player::where('name', $playerName)->first();
-
-            if (
-                !$this->isPlayerAFitForTeam(
-                    $player,
-                    $maxNumberOfPlayersWithHighestSkill,
-                    $teamHabilityMaxValue,
-                    $teamsInfo[$teamIndex]
-                )
-            ) {
+            if (count($this->teams[$this->teamIndex]) == $playersQuantity) {
                 $counter++;
                 continue;
             }
 
-            $this->updateTeamInfo($teamsInfo[$teamIndex], $player);
-            $this->updateTeamVariables(
-                $teams,
-                $teamIndex,
-                $player,
-                $randomIndex,
-                $confirmedPlayers,
-                $counter
-            );
+            $randomIndex = array_rand($this->confirmedPlayers);
+            $playerName = $this->confirmedPlayers[$randomIndex];
+            $this->setPlayer($players[$playerName]);
+
+            if ($this->isPlayerAFitForTeam()) {
+                $this->updateTeamInfo($this->teamsInfo[$this->teamIndex]);
+                $this->addPlayerToTeam($this->player);
+
+                unset($this->confirmedPlayers[$randomIndex]);
+                $this->confirmedPlayers = array_values($this->confirmedPlayers);
+            }
+
+            $counter++;
         }
 
-        dd($teamsInfo);
+        if ($counter == $maxIterations) {
+            foreach ($this->confirmedPlayers as $playerName) {
+                $this->setTeamIndex($counter % 2);
 
-        return view('teams');
+                if (count($this->teams[$this->teamIndex]) == 5) {
+                    $counter++;
+                    $this->setTeamIndex($counter % 2);
+                }
+
+                $this->setPlayer($players[$playerName]);
+                $this->updateTeamInfo($this->teamsInfo[$this->teamIndex]);
+                $this->addPlayerToTeam($this->player);
+                
+                $counter++;
+            }
+        }
+
+        session(['teams' => $this->teams, 'teamsInfo' => $this->teamsInfo]);
+
+        return response()->json(['url' => "/teams"]);
     }
+
+    
 
     private function calculateTeamBalancing(int $playersQuantity): int
     {
@@ -148,72 +194,97 @@ class PlayerController extends Controller
         };
     }
 
-    private function calculateTeamHabilityMaxValue(
-        int $playersQuantity, 
-        int $maxNumberOfPlayersWithHighestSkill
-    ): int {
-        return ($maxNumberOfPlayersWithHighestSkill*self::HABILITY_MAX_VALUE) + $this->factorial($playersQuantity - $maxNumberOfPlayersWithHighestSkill);
+    private function calculateTeamHabilityMaxValue(int $playersQuantity): int {
+        return (
+            $this->maxNumberOfPlayersWithHighestSkill*self::HABILITY_MAX_VALUE
+        ) + $this->factorial($playersQuantity - $this->maxNumberOfPlayersWithHighestSkill);
     }
 
     private function factorial(int $number): int 
     {
-        $factorial = 0;
-
-        for ($i = 1; $i <= $number; $i++) {
-            $factorial += $i;
-        }
-
-        return $factorial;
+        return ($number * ($number + 1)) / 2;
     }
 
-    private function isPlayerAFitForTeam(
-        Player $player,
-        int $maxNumberOfPlayersWithHighestSkill,
-        int $teamHabilityMaxValue,
-        array $teamInfo
-    ): bool {
-        if ($player->hability + $teamInfo["currentHabilityValue"] >= $teamHabilityMaxValue) {
+    private function isPlayerAFitForTeam(): bool 
+    {
+        if (count($this->confirmedPlayers) == 1) {
+            return true;
+        }
+
+        if ($this->shouldSkipBalancing()) {
+            return true;
+        }
+
+        if ($this->player->hability + $this->teamsInfo[$this->teamIndex]["currentHabilityValue"] >= $this->teamHabilityMaxValue) {
             return false;
         }
 
         if (
-            $player->hability === self::HABILITY_MAX_VALUE && 
-            $teamInfo["currentQuantityOfPlayersWithHighestSkill"] >= $maxNumberOfPlayersWithHighestSkill
+            $this->player->hability === self::HABILITY_MAX_VALUE && 
+            $this->teamsInfo[$this->teamIndex]["currentQuantityOfPlayersWithHighestSkill"] >= $this->maxNumberOfPlayersWithHighestSkill
         ) {
             return false;
         }
 
-        if ($player->is_goalkeeper && $teamInfo["hasGoalkeeper"]) {
+        if ($this->player->is_goalkeeper && $this->teamsInfo[$this->teamIndex]["hasGoalkeeper"]) {
             return false;
         }
 
         return true;
     }
 
-    private function updateTeamInfo(array &$teamInfo, Player $player): void 
+    private function shouldSkipBalancing(): bool 
     {
-        if ($player->hability === self::HABILITY_MAX_VALUE) {
+        if (
+            !$this->teamsInfo[0]["currentHabilityValue"] >= $this->teamHabilityMaxValue || 
+            !$this->teamsInfo[1]["currentHabilityValue"] >= $this->teamHabilityMaxValue
+        ) {
+            return false;
+        }
+
+        if (
+            $this->player->hability === self::HABILITY_MAX_VALUE && 
+            !$this->teamsInfo[0]["currentQuantityOfPlayersWithHighestSkill"] >= $this->maxNumberOfPlayersWithHighestSkill ||
+            !$this->teamsInfo[1]["currentQuantityOfPlayersWithHighestSkill"] >= $this->maxNumberOfPlayersWithHighestSkill
+        ) {
+            return false;
+        }
+
+        if (
+            $this->player->is_goalkeeper && 
+            !$this->teamsInfo[0]["hasGoalkeeper"] ||
+            !$this->teamsInfo[1]["hasGoalkeeper"]
+        ) {
+            return false;
+        }
+
+        return true;
+    }
+
+    private function addPlayerToTeam(Player $player): void
+    {
+        $this->teams[$this->teamIndex][] = $player;
+    }
+
+    private function updateTeamInfo(array &$teamInfo): void 
+    {
+        if ($this->player->hability === self::HABILITY_MAX_VALUE) {
             $teamInfo["currentQuantityOfPlayersWithHighestSkill"]++;
         }
 
-        if ($player->is_goalkeeper) {
+        if ($this->player->is_goalkeeper) {
             $teamInfo["hasGoalkeeper"] = true;
         }
 
-        $teamInfo["currentHabilityValue"] = $player->hability + $teamInfo["currentHabilityValue"];
+        $teamInfo["currentHabilityValue"] += $this->player->hability;
     }
 
-    private function updateTeamVariables(
-        array &$teams,
-        int $teamIndex,
-        Player $player,
-        int $randomIndex,
-        array &$confirmedPlayers,
-        int &$counter
-    ): void {
-        $teams[$teamIndex][] = $player;
-        unset($confirmedPlayers[$randomIndex]);
-        $confirmedPlayers = array_values($confirmedPlayers);
-        $counter++;
+    public function listTeams(Request $request): View
+    {
+        $allData = session()->all();
+        return view('teams', [
+            'teams' => $allData['teams'], 
+            'teamsInfo' => $allData['teamsInfo']
+        ]);
     }
 }
