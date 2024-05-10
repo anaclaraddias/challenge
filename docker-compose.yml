@@ -25,9 +25,3 @@ services:
       MYSQL_ALLOW_EMPTY_PASSWORD: "yes"
     ports:
       - "3306:3306"
-    networks:
-      - app-network
-
-networks:
-  app-network:
-    driver: bridge

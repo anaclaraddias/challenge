@@ -12,3 +12,11 @@ Route::get('/create-player', function () {
 });
 
 Route::post('/player', [PlayerController::class, 'create'])->name('create-player');
+
+Route::get('/players', [PlayerController::class, 'listAll']);
+
+Route::post('/generate-team', [PlayerController::class, 'generateTeam'])->name('generate-team');
+
+// Route::post('/update-players-list', [PlayerController::class, 'updatePlayers']);
+
+Route::get('/teams', [PlayerController::class, 'listTeams']);

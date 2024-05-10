@@ -9,15 +9,27 @@
     <link href="https://fonts.bunny.net/css?family=figtree:400,600&display=swap" rel="stylesheet" /> -->
 </head>
 
+@php
+dd(session('confirmed_players'));
+@endphp
+
 <body>
     <div>
         <header>
-            <h1>Futebol Poços de Caldas</h1>
+            <h1>Times</h1>
         </header>
 
         <main>
-            <a href="/create-player"><button>Cadastrar novo jogador</button></a>
-            <a href="/players"><button>Confirmar Presença</button></a>
+            @foreach($teams as $team)
+                <label for="{{ $player->name }}">{{ $team->name }}</label>
+                <label>
+                    <input type="radio" name="{{ $player->name }}" value="sim" required> Sim
+                </label>
+                <label>
+                    <input type="radio" name="{{ $player->name }}" value="nao" required> Não
+                </label>
+
+            @endforeach
         </main>
 
         <footer>
