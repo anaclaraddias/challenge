@@ -67,7 +67,7 @@ The Laravel framework is open-sourced software licensed under the [MIT license](
 
 ## Learning to run the project
 - Start by cloning the repository into your terminal.
-- Find the `.env.example` file, uncomment the database constants, and rename the file to .env.
+- Find the `.env.example` file, copy it, uncomment the database constants, and rename the file to .env.
 - Run `./first-configs.sh` in the terminal.
 - Now run `docker compose up --build` to build the containers.
 - After that you can access the project in `localhost:8000`.
