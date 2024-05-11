@@ -68,6 +68,7 @@ The Laravel framework is open-sourced software licensed under the [MIT license](
 ## Learning to run the project
 - Start by cloning the repository into your terminal.
 - Find the `.env.example` file, uncomment the database constants, and rename the file to .env.
+- Run `./first-configs.sh` in the terminal.
 - Now run `docker compose up --build` to build the containers.
 - After that you can access the project in `localhost:8000`.
 - You can also connect to the database with the information in the `.env` file.
@@ -75,4 +76,5 @@ The Laravel framework is open-sourced software licensed under the [MIT license](
     - Run `./refresh-db.sh` in the terminal to run the migrations and seed the database. 
     - Run `./migrate.sh` to migrate.
     - Run `./migrate-rollback.sh` to rollback the migrations.
-    - Run `./migrate-rollback.sh` to seed the database
+    - Run `./seed-db.sh` to seed the database
+- Obs: Run `./migrate.sh` in the first time
